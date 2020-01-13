@@ -1,21 +1,53 @@
 import "reflect-metadata";
-import {createConnection} from "typeorm";
-import {User} from "./entity/User";
+import express from 'express';
+import 'dotenv/config';
+import { ApolloServer } from 'apollo-server-express';
+import { buildSchema } from 'type-graphql';
+import { UserResolver } from './resolvers/userResolver';
+import { createConnection } from "typeorm";
+import { MovieResolver } from "./resolvers/movieResolver";
+import cookieParser from 'cookie-parser';
+import { verify } from "jsonwebtoken";
 
-createConnection().then(async connection => {
+(async () => {
+    const app = express();
 
-    console.log("Inserting a new user into the database...");
-    const user = new User();
-    user.firstName = "Timber";
-    user.lastName = "Saw";
-    user.age = 25;
-    await connection.manager.save(user);
-    console.log("Saved a new user with id: " + user.id);
+    app.use(cookieParser());
+    app.get('/', (req, res) => {
+        res.send('hello world');
+    });
 
-    console.log("Loading users from the database...");
-    const users = await connection.manager.find(User);
-    console.log("Loaded users: ", users);
+    app.post('/refresh_token', (req, res) => {
+        const token = req.cookies.hii;
 
-    console.log("Here you can setup and run express/koa/any other framework.");
+        if (!token) {
+            return res.send({ ok: false, accessToken: ''});
+        }
 
-}).catch(error => console.log(error));
+        let payload: any = null;
+
+        try {
+            payload = verify(token, process.env.REFRESH_TOKEN_SECRET)
+        } catch (err) {
+            console.log(err);
+        }
+    })
+
+    await createConnection();
+
+    const apolloServer = new ApolloServer({
+       schema: await buildSchema({
+           resolvers: [UserResolver, MovieResolver]
+       }),
+       context: ({req, res}) => ({req, res})
+    });
+
+    apolloServer.applyMiddleware({ app });
+
+    app.listen(4000, () => {
+        console.log('server listening on port 4000');
+    });
+})();
+ 
+
+
